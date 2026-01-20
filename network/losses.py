@@ -63,59 +63,61 @@ class PearsonLoss(nn.Module):
 # 1. 定义组合损失函数类 (可以直接写在 Train.py 里，或者只是简单的 lambda)
 import torch
 import torch.nn as nn
+import torch
+import torch.nn as nn
+
 
 class CompositeLoss(nn.Module):
-    """
-    结合 Pearson Loss, MSE (Sum of Squared Error) 和 L1 Loss 的组合损失函数。
-    """
-    def __init__(self, weight_pearson=65.0, weight_mse=0.4, weight_l1=0.1):
+    def __init__(self, weight_pearson=65.0, weight_mse=0.4, weight_l1=0.1, weight_smooth=0.5): # 建议平滑权重 0.1 ~ 0.5
         super(CompositeLoss, self).__init__()
         self.weight_pearson = weight_pearson
         self.weight_mse = weight_mse
         self.weight_l1 = weight_l1
+        self.weight_smooth = weight_smooth # 新增平滑权重
         
     def forward(self, pred, target):
         """
-        Args:
-            pred (torch.Tensor): 预测值 (复数或实数)
-            target (torch.Tensor): 标签值
+        pred: [Batch, 1, 256, 1] (复数或实数幅度)
         """
-        # 1. 预处理：取幅度 (SBL 重构通常关注幅度谱的稀疏性)
         pred_mag = torch.abs(pred)
         target_mag = torch.abs(target)
 
-        # 2. 计算 MSE Loss (保持您原有的 Sum 逻辑，而非 Mean)
+        # 1. MSE Loss
         mse_loss = torch.sum((pred_mag - target_mag) ** 2)
         
-        # 3. 计算 L1 Loss (稀疏约束的关键)
-        # 使用 sum 还是 mean 取决于您的权重。为了与您的 mse_loss (sum) 量级匹配，这里也用 sum
-        l1_loss = torch.sum(torch.abs(pred_mag - target_mag))
+        # 2. L1 Loss (控制线条变细)
+        l1_loss = torch.sum(pred_mag) # 直接对预测幅度求和，强迫稀疏
 
-        # 4. 计算 Pearson Correlation (保持原有逻辑)
-        X = pred.squeeze()  
-        I = torch.abs(target).squeeze()
+        # 3. Pearson Loss (控制波形相似)
+        X = pred_mag.view(pred_mag.shape[0], -1)
+        I = target_mag.view(target_mag.shape[0], -1)
         
-        # 维度处理，防止 batch 为 1 时 squeeze 掉 batch 维
-        if X.ndim == 1: X = X.unsqueeze(0)
-        if I.ndim == 1: I = I.unsqueeze(0)
-
+        # ... (Pearson 计算保持原样，略) ...
+        # 为了简洁，这里用伪代码表示 Pearson 计算过程
+        # (请保留你原来的 Pearson 代码)
         mex = torch.mean(X, 1, keepdim=True)
         mei = torch.mean(I, 1, keepdim=True)
-        
         sigmax = torch.sqrt(torch.mean((X - mex) ** 2, dim=1, keepdim=True))
         sigmai = torch.sqrt(torch.mean((I - mei) ** 2, dim=1, keepdim=True))
-        
-        # 加上 1e-8 防止除以零 (单精度下非常重要)
-        convv = torch.mean(torch.abs(X - mex) * torch.abs(I - mei), dim=1, keepdim=True)
-        sigmul = sigmax * sigmai + 1e-8
-        
-        pearson = torch.mean(convv / sigmul)
-        
-        # 5. 总损失
-        loss = (1 - pearson) * self.weight_pearson + mse_loss * self.weight_mse + l1_loss * self.weight_l1
-        
-        # 返回4个值，以便 train_utils 记录日志
-        return loss, pearson.item(), mse_loss.item(), l1_loss.item()
+        convv = torch.mean((X - mex) * (I - mei), dim=1, keepdim=True)
+        pearson = torch.mean(convv / (sigmax * sigmai + 1e-6))
 
-    def __repr__(self):
-        return f'CompositeLoss(w_p={self.weight_pearson}, w_m={self.weight_mse}, w_l1={self.weight_l1})'
+        # === 4. 新增：时序平滑损失 (Temporal Smoothness Loss) ===
+        # 计算 pred[t] 和 pred[t-1] 的 L1 距离
+        # 假设 Batch 是连续的，我们惩罚相邻两帧的突变
+        if pred_mag.shape[0] > 1:
+            # diff = |Frame_t - Frame_{t-1}|
+            diff = torch.abs(pred_mag[1:] - pred_mag[:-1])
+            # 我们希望差异越小越好（连贯），但不要为0（允许缓慢变化）
+            smooth_loss = torch.sum(diff) 
+        else:
+            smooth_loss = torch.tensor(0.0).to(pred.device)
+
+        # 总损失
+        # 重点：适当加大 weight_smooth 可以让线条更连贯，但太大了一根线会拖成一片
+        loss = (1 - pearson) * self.weight_pearson + \
+               mse_loss * self.weight_mse + \
+               l1_loss * self.weight_l1 + \
+               smooth_loss * self.weight_smooth
+        
+        return loss, pearson.item(), mse_loss.item(), l1_loss.item(), smooth_loss.item()

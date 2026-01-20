@@ -157,7 +157,12 @@ if __name__ == "__main__":
     if TRAIN_PHASE == 'train':
         # criterion = PearsonLoss(weight_pearson=ps_list[0], weight_mse=ps_list[1])
         # 2. 实例化这个新的 Loss
-        criterion = CompositeLoss(pearson_weight=ps_list[0], mse_weight=ps_list[1], l1_weight=0.1) 
+        criterion = CompositeLoss(
+            weight_pearson=200.0, 
+            weight_mse=0.01, 
+            weight_l1=0.001,      
+            weight_smooth=0.01   
+        )
 
         # train_model2: 保持你已有接口（net, data_loader, optimizer, scheduler, criterion, args, logger, ...)
         Loss, final_outputs, final_labels = train_model2(net, data_loader, optimizer, scheduler,criterion, args, 

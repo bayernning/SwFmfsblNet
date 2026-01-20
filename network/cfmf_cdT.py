@@ -1,216 +1,3 @@
-# # -*- coding: utf-8 -*-
-# """
-# cfmf_cdT.py
-# HyperNet-driven CFMF implementation.
-# HyperNet outputs c (layer-1), d (layer-1), T (layer) per input batch.
-# T: each layer a scalar (broadcastable).
-# """
-
-# import torch
-# import torch.nn as nn
-# import torch.nn.functional as F
-# import numpy as np
-
-
-# class HyperNet_1(nn.Module):
-#     def __init__(self, kernel, pad, layer):
-#         super(HyperNet_1, self).__init__()
-#         # simple 1D feature extractor -> FC heads
-#         self.conv1 = nn.Conv1d(1, 32, kernel_size=3, padding=1)
-#         self.pool1 = nn.MaxPool1d(kernel_size=4, stride=4)
-#         self.conv2 = nn.Conv1d(32, 32, kernel_size=3, padding=1)
-#         self.pool2 = nn.MaxPool1d(kernel_size=4, stride=4)
-#         self.conv3 = nn.Conv1d(32, 32, kernel_size=3, padding=1)
-#         self.pool3 = nn.MaxPool1d(kernel_size=4, stride=4)
-
-#         feat_dim = 32 * 4
-#         self.fc_c = nn.Linear(feat_dim, layer - 1)
-#         self.fc_d = nn.Linear(feat_dim, layer - 1)
-#         self.fc_T = nn.Linear(feat_dim, layer)
-
-#     def forward(self, x, clamp=None):
-#         """
-#         x: [B, 1, L] or [B, L] depending how caller sends; we expect [B, 1, L]
-#         Returns:
-#             c: [B, layer-1]
-#             d: [B, layer-1]
-#             T: [B, layer]
-#         """
-#         if x.ndim == 2:
-#             x = x.unsqueeze(1)  # [B,1,L]
-#         x = self.conv1(x)
-#         x = self.pool1(F.relu(x))
-#         x = self.conv2(x)
-#         x = self.pool2(F.relu(x))
-#         x = self.conv3(x)
-#         x = self.pool3(F.relu(x))
-#         x = x.view(x.size(0), -1)  # [B, feat_dim]
-
-#         c = torch.abs(self.fc_c(x))
-#         d = torch.abs(self.fc_d(x))
-#         T = torch.abs(self.fc_T(x))
-
-#         if clamp is not None:
-#             c = c.clamp(min=clamp[0], max=clamp[1])
-#             T = T.clamp(min=clamp[0], max=clamp[1])
-
-#         return c, d, T
-
-
-# class cfmf(nn.Module):
-#     def __init__(self, Para):
-#         super(cfmf, self).__init__()
-#         # Para must contain: layer_num, P, Q, N, a0, b0
-#         self.Nlayer = int(Para['layer_num'])
-#         self.P = int(Para['P'])
-#         self.Q = int(Para['Q'])
-#         self.N = int(Para['N'])
-
-#         # hyper-parameters as nn.Parameters or constants
-#         self.a0 = nn.Parameter(torch.tensor(float(Para.get('a0', 1e-4)), dtype=torch.float32))
-#         self.b0 = nn.Parameter(torch.tensor(float(Para.get('b0', 1e-4)), dtype=torch.float32))
-
-#         # HyperNet
-#         self.h = HyperNet_1(kernel=3, pad=1, layer=self.Nlayer)
-
-#         z = Para['zidiancuda']
-#         self.register_buffer("A",z['A'])
-#         self.register_buffer("AT",z['AT'])
-#         self.register_buffer("AA",z['AA'])
-
-
-#     def forward(self, Y, zidian, clamp_min=1e-5, clamp_max=2.0):
-#         """
-#         Y: expected shape [B, Q, N, 1] or similar (kept compatible with your dataset)
-#         zidian: dict with A, AT, AA
-#         Returns:
-#             U: estimated signal [B, 1, M, 1] (float tensor)
-#             c_last, d_last, T_last: numpy arrays of last-batch hyperparams for logging (shape [1, ...])
-#         """
-#         device = Y.device
-#         A = self.A
-#         AT = self.AT
-#         AA = self.AA
-#         batch_size = Y.shape[0]
-#         M = A.shape[1]
-
-#         # AY = AT @ Y  (preserve shapes)
-#         # keep dtype float32
-
-        
-#         AY = torch.matmul(AT,Y)
-        
-#         ay_mag = torch.abs(AY)
-        
-#         ay_flat = ay_mag.view(batch_size, 1, -1)  # [B,1,L_flat]
-
-#         # HyperNet outputs (batch-wise)
-#         c_out, d_out, T_out = self.h(ay_flat, clamp=(clamp_min, clamp_max))
-#         # shapes: c_out [B, layer-1], d_out [B, layer-1], T_out [B, layer]
-
-#         # reshape to broadcastable forms: [B, layer, 1, 1] etc.
-#         c = c_out.view(batch_size, self.Nlayer - 1, 1, 1)
-#         d = d_out.view(batch_size, self.Nlayer - 1, 1, 1)
-#         T = T_out.view(batch_size, self.Nlayer, 1, 1)
-
-#         # initialize U as zeros (float32). Using float32 to save memory.
-#         U = torch.zeros([batch_size, 1, M, 1], dtype=torch.complex64, device=device)
-
-#         # initialize eps and Lamda
-#         eps = (self.a0 / self.b0) * torch.ones(batch_size, 1, 1, 1, device=device, dtype=torch.complex64)
-#         Lamda = c[:, 0:1, :, :] / (d[:, 0:1, :, :] * torch.ones(batch_size, 1, M, 1, device=device))
-
-#         # iterative layers
-#         for k_layer in range(self.Nlayer - 1):
-#             _c = c[:, k_layer:k_layer + 1, :, :]  # [B,1,1,1]
-#             _d = d[:, k_layer:k_layer + 1, :, :]
-#             _T = T[:, k_layer:k_layer + 1, :, :]
-
-#             U, eps, Lamda = self.layer(Y, zidian, AA, AY, U, eps, Lamda, _T, self.a0, self.b0, _c, _d, self.N)
-
-#         # last layer
-#         _T_last = T[:, self.Nlayer - 1:self.Nlayer, :, :]
-#         U = self.last_layer(Y, AA, AY, U, eps, Lamda, _T_last)
-
-#         # normalization and ensure positive real output
-#         U = U / (torch.max(torch.abs(U)) + 1e-12)
-#         U_out = torch.abs(U)
-
-#         # return last-batch c,d,T for logging as numpy (only last element in batch)
-#         c_last = c_out[-1:, :].detach().cpu().numpy().reshape(1, -1)
-#         d_last = d_out[-1:, :].detach().cpu().numpy().reshape(1, -1)
-#         T_last = T_out[-1:, :].detach().cpu().numpy().reshape(1, -1)
-
-#         return U_out, c_last, d_last, T_last
-
-#     def layer(self, Y, zidian, AA, AY, U, eps, Lamda, T, a0, b0, c0, d0, N):
-#         """
-#         One iterative layer update (vectorized).
-#         Inputs shapes are broadcastable:
-#         - T: [B,1,1,1], c0,d0 similar
-#         - U: [B,1,M,1]
-#         - AA: [M,M] (or [1,M,M])
-#         """
-#         device = U.device
-#         batch_size = Y.shape[0]
-#         M = U.shape[2]
-
-#         Delta = U
-#         U1 = T * Delta
-#         U2 = torch.matmul(AA, Delta)
-#         U3 = AY
-
-#         # compute temp1 = 1 / (eps * T + Lamda)
-#         denom = (eps * T + Lamda)
-#         temp1 = torch.div(torch.ones_like(denom), denom)
-
-#         U_new = eps * (U1 - U2 + U3) * temp1
-
-#         # D diagonal from AA
-#         D = torch.diag(AA)
-#         D = D.view(1,-1, 1).to(device)
-#         temp = eps * D + Lamda
-#         Sigma = torch.div(torch.ones_like(temp), temp)
-
-#         # Update eps
-#         A = zidian['A'].to(device)
-#         # Frobenius norm across spatial dims
-#         eps1 = torch.norm(Y - torch.matmul(A, U_new), p='fro', dim=[2, 3], keepdim=True) ** 2
-#         eps2 = torch.sum(D * Sigma, dim=[2, 3], keepdim=True)
-#         a = a0 + N
-#         eps_new = a / (b0 + (eps1 + eps2))
-
-#         # Update Lamda
-#         Lamda_new = (c0 + 1) / (d0 + (torch.abs(U_new) ** 2 + Sigma))
-
-#         return U_new, eps_new, Lamda_new
-
-#     def last_layer(self, Y, AA, AY, U, eps, Lamda, T):
-#         P = U.shape[2]
-#         denom = (eps * T + Lamda)
-#         temp1 = torch.div(torch.ones_like(denom), denom)
-#         U_new = eps * (T * U - torch.matmul(AA, U) + AY) * temp1
-#         return U_new
-
-
-# def myDiag(x):
-#     """
-#     Efficient batched diagonal extraction.
-#     x: [M, M] or [1, M, M] or [B, M, M]
-#     returns: [M] or [B, M]
-#     """
-#     if x.ndim == 2:
-#         return torch.diagonal(x, offset=0, dim1=0, dim2=1)
-#     else:
-#         # batched diagonal
-#         return torch.diagonal(x, offset=0, dim1=-2, dim2=-1)
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Dec 23 09:36:03 2024
-
-@author: dell
-"""
-
 # -*- coding: utf-8 -*-
 """
 Created on Tue Jan 16 15:33:39 2024
@@ -376,6 +163,65 @@ class HyperNetOptimized(nn.Module):
         return c0, d0, T0
 
 
+# 修改 network/cfmf_cdT.py 中的 HyperNet 定义
+class HyperNet_Context2D(nn.Module):
+    def __init__(self, layer_num, in_channels=2):
+        """
+        利用 Batch 维度作为上下文信息的超网络
+        in_channels: 2 (实部 + 虚部)
+        """
+        super(HyperNet_Context2D, self).__init__()
+        
+        # 1. 2D 卷积层：同时提取 Range (H) 和 Time (W/Batch) 特征
+        # 输入形状虚拟为: [1, 2, Range(256), Batch(Time)]
+        self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=(3, 3), padding=(1, 1))
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=(3, 3), padding=(1, 1))
+        
+        # 2. 池化层：我们只压缩 Range 维度，保留 Time(Batch) 维度
+        # AdaptiveAvgPool2d((1, None)) 表示 H 变为 1，W (Batch) 保持原样
+        self.pool = nn.AdaptiveAvgPool2d((1, None)) 
+        
+        # 3. 参数预测头 (使用 1D 卷积在时间轴上进一步融合)
+        # 输入: [1, 64, Batch]
+        self.head_c = nn.Conv1d(64, layer_num - 1, kernel_size=3, padding=1)
+        self.head_d = nn.Conv1d(64, layer_num - 1, kernel_size=3, padding=1)
+        self.head_T = nn.Conv1d(64, layer_num, kernel_size=3, padding=1)
+
+    def forward(self, x, clamp_min, clamp_max):
+        """
+        x: [Batch, 2, 256] (Real, Imag)
+        """
+        # 1. 维度变换：将 Batch 移到最后作为“宽度/时间”
+        # [Batch, 2, 256] -> [2, 256, Batch] -> [1, 2, 256, Batch]
+        # 这里 1 是虚拟的 batch_size (因为我们把真正的 batch 当作了图的宽度)
+        x_img = x.permute(1, 2, 0).unsqueeze(0)
+        
+        # 2. 提取时空特征
+        feat = F.relu(self.conv1(x_img))
+        feat = F.relu(self.conv2(feat)) # [1, 64, 256, Batch]
+        
+        # 3. 压缩 Range 维度，保留 Batch 维度
+        feat = self.pool(feat) # [1, 64, 1, Batch]
+        feat = feat.squeeze(2) # [1, 64, Batch]
+        
+        # 4. 预测参数
+        c = torch.abs(self.head_c(feat)) # [1, Layers-1, Batch]
+        d = torch.abs(self.head_d(feat))
+        T = torch.abs(self.head_T(feat))
+        
+        # 5. 还原维度以匹配 SBL 的输入要求
+        # [1, L, B] -> [B, L]
+        c = c.squeeze(0).permute(1, 0) # [Batch, Layers-1]
+        d = d.squeeze(0).permute(1, 0)
+        T = T.squeeze(0).permute(1, 0)
+        
+        # 限制范围
+        c = c.clamp(min=clamp_min, max=clamp_max)
+        d = d.clamp(min=clamp_min) # d 通常不需要上限
+        T = T.clamp(min=clamp_min, max=clamp_max)
+        
+        return c, d, T
+    
 class cfmf(nn.Module):
     def __init__(self, Para):
         super(cfmf, self).__init__()
@@ -390,8 +236,9 @@ class cfmf(nn.Module):
         self.b0 = nn.Parameter(Para['b0'] * tc.ones(1))
 
         # c0, d0, T 由 HyperNet 生成，不再作为 nn.Parameter
-        self.h = HyperNet_7convL_CU_5_1(3, 1, self.Nlayer)  # HyperNet_1   HyperNet_7convL_CU_5_1
-
+        # self.h = HyperNet_7convL_CU_5_1(3, 1, self.Nlayer)  # HyperNet_1   HyperNet_7convL_CU_5_1
+        self.h = HyperNet_Context2D(layer_num=self.Nlayer, in_channels=2)
+    
     def forward(self, Y, zidian, clamp_min, clamp_max):
         A = zidian['A']
         AT = zidian['AT']
@@ -404,7 +251,22 @@ class cfmf(nn.Module):
         AA = AA.unsqueeze(0)  # [1,128,128]
         AY = tc.matmul(AT, Y)  # 65536 1
 
-        c, d, T = self.h(abs(AY).float().squeeze(3), clamp_min, clamp_max)  # [batch 58]
+        # c, d, T = self.h(abs(AY).float().squeeze(3), clamp_min, clamp_max)  # [batch 58]
+        # === 修改开始 ===
+        # 1. 构造双通道输入 [Batch, 2, 256]
+        # 确保 AY 是复数 (complex64)，提取实部和虚部
+        # AY.real: [Batch, 256, 1] -> squeeze -> [Batch, 256] -> unsqueeze -> [Batch, 1, 256]
+        ay_real = AY.real.squeeze(-1).unsqueeze(1)
+        ay_imag = AY.imag.squeeze(-1).unsqueeze(1)
+        
+        # 拼接: [Batch, 2, 256]
+        ay_input = torch.cat([ay_real, ay_imag], dim=1) 
+
+        # 2. 调用 Context HyperNet
+        # 注意：这里不需要再 .float()，因为 real/imag 取出来已经是 float 了
+        c, d, T = self.h(ay_input, clamp_min, clamp_max)
+        # === 修改结束 ===
+        
         c = c.reshape(batch_size, -1, 1, 1)  # [batch 3N-2 1 1]
         d = d.reshape(batch_size, -1, 1, 1)
         T = T.reshape(batch_size, -1, 1, 1)
@@ -493,7 +355,7 @@ class cfmf(nn.Module):
         # U1 = U.detach().data.cpu().numpy()
         # U1 = np.fft.ifftshift(U1, 0)
         # U2 = tc.from_numpy(U1).cuda()
-        
+
         # 修改点 2: 归一化分母防止除零
         # 原始: U = U / tc.max(abs(U))
         U = U / (tc.max(abs(U)) + 1e-8)
