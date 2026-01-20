@@ -18,7 +18,7 @@ import os
 from scipy.io import savemat
 from skimage.metrics import structural_similarity as compare_ssim
 import gc
-from network.losses import PearsonLoss
+from network.losses import CompositeLoss, PearsonLoss
 from network.train_utils import test_model, train_model, clean_memory, count_param, load_checkpoint
 import matplotlib.pyplot as plt
 # from network.classifier import test_classifier
@@ -34,7 +34,10 @@ if __name__ == "__main__":
     # 模型参数设置
     ind_t = 2
     ps_list = [65, 0.5]
-    clamp_list = [1e-3, 2]
+    # 修改前
+    # clamp_list = [1e-3, 2]
+    # 修改后 (匹配单精度训练的设置)
+    clamp_list = [1e-6, 10.0]
     noise = 0
 
     # 目录设置
@@ -110,7 +113,7 @@ if __name__ == "__main__":
     # ================ 加载检查点 ================
     net = cfmf(Para).cuda()
     checkpoint = torch.load('./model/model8/model_epoch_50.pth','cuda')  
-    criterion = PearsonLoss(weight_pearson=ps_list[0], weight_mse=ps_list[1])
+    criterion = CompositeLoss(weight_pearson=ps_list[0], weight_mse=ps_list[1], weight_l1=0.1)
 
     net.load_state_dict(checkpoint['model_state_dict'])  # 加载预训练的权重
     Loss, final_outputs, final_labels = test_model(net, data_loader, criterion, args, num_iter_epoch, zidiancuda, clamp_list, phase='test')

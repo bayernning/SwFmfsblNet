@@ -13,7 +13,7 @@ def set_opts():
     # trainning settings
     parser.add_argument('--batch_size', type=int, default=64,
                         help="Batchsize of training, (default:64)")
-    parser.add_argument('--test_batchsize', type=int, default=8,
+    parser.add_argument('--test_batchsize', type=int, default=64,
                         help="Batchsize of training, (default:64)")
     parser.add_argument('--epochs', type=int, default=100, help="Training epochs,  (default:60)")
     parser.add_argument('--lr', type=float, default=2e-3,  # 1e-3
@@ -73,7 +73,7 @@ def set_opts():
     parser.add_argument('--test_SNR', type=float, default=5,
                         help="Initial value for LeakyReLU, (default: 0.2)")
     # parser.add_argument('--K', type=int, default=8, help="The iteration of Module, (default: 4)")
-    parser.add_argument('--layer_num', type=int, default=20, help="The depth of SNet, (default: 20)")
+    parser.add_argument('--layer_num', type=int, default=12, help="The depth of SNet, (default: 20)")
 
     args = parser.parse_args()
 

@@ -18,7 +18,7 @@ def ssim_index(im1, im2):
         im1, im2: np.uint8 format
     '''
 
-    out = compare_ssim(im1.squeeze(), im2.squeeze(), gaussian_weights=True, data_range=2)
+    out = compare_ssim(im1.squeeze(), im2.squeeze(), gaussian_weights=True, data_range=1.0)
 
     return out
 

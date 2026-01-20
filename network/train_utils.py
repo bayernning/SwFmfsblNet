@@ -6,7 +6,6 @@ import os
 import json
 from scipy.io import savemat
 from network import util
-from network.classifier import train_classifier
 
 def load_checkpoint(model_dir, net, optimizer=None, epoch=None):
     """
@@ -293,7 +292,7 @@ def train_model2(net, data_loader, optimizer, scheduler ,criterion, args, logger
                                         
             
             # 计算损失
-            loss, pearson_iter, mse_iter = criterion(x_out, x_te)
+            loss, pearson_iter, mse_iter, l1_iter = criterion(x_out, x_te)
             ssim_iter = util.batch_SSIM(abs(x_out), abs(x_te))
             loss.backward()
             optimizer.step()
@@ -303,11 +302,12 @@ def train_model2(net, data_loader, optimizer, scheduler ,criterion, args, logger
             ssim_per_epoch += ssim_iter / num_iter_epoch[phase]
             pearson_per_epoch += pearson_iter / num_iter_epoch[phase]
             mse_per_epoch += mse_iter/ num_iter_epoch[phase] 
+            l1_per_epoch = l1_iter / num_iter_epoch[phase]
             
             # 打印进度
             if (ii + 1) % np.floor(num_iter_epoch[phase] / 2) == 0:
                 logger.info(
-                    '------> [Epoch:{:>2d}/{:<2d}] {:s}:{:0>4d}/{:0>4d}, Loss={:+.2e},Pearson={:+.4e}, lr={:.1e}'.format(
+                    '------> [Epoch:{:>2d}/{:<2d}] {:s}:{:0>4d}/{:0>4d}, Loss={:+.2e},Pearson={:+.4e}, l1_iter={:+.4f},lr={:.1e}'.format(
                         epoch + 1,
                         args.epochs,
                         phase,
@@ -315,6 +315,7 @@ def train_model2(net, data_loader, optimizer, scheduler ,criterion, args, logger
                         num_iter_epoch[phase],
                         loss_per_epoch,
                         pearson_per_epoch,
+                        l1_per_epoch,
                         optimizer.param_groups[0]['lr']
                     )
                 )
@@ -424,12 +425,13 @@ def test_model(net, data_loader, criterion, args, num_iter_epoch, zidiancuda, cl
                 label.append(idx_all[start_idx])
 
         # 计算损失
-        loss, pearson_iter, mse_iter = criterion(x_out, x_te)
+        loss, pearson_iter, mse_iter, l1_iter = criterion(x_out, x_te)
         
         # 更新统计
         loss_per_epoch += loss.item() / num_iter_epoch[phase]
         ssim_iter = util.batch_SSIM(abs(x_out), abs(x_te))
         pearson_per_epoch += pearson_iter / num_iter_epoch[phase]
+        l1_per_epoch = l1_iter / num_iter_epoch[phase]
         
     
     # 计算epoch耗时
