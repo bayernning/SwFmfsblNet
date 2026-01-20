@@ -13,9 +13,9 @@ import hdf5storage
 import matplotlib.pyplot as plt
 
 from options import set_opts
-from network import DenoisingDatasets, utils_logger, zidian, util
+from network import Datasets, utils_logger, zidian, util
 from network.cfmf_cdT import cfmf
-from network.losses import PearsonLoss
+from network.losses import CompositeLoss, PearsonLoss
 from network.train_utils import test_model, train_model, train_model2, clean_memory, count_param, load_checkpoint
 
 
@@ -37,7 +37,11 @@ if __name__ == "__main__":
     # 模型参数设置
     ind_t = 12
     ps_list = [60, 0.45]
-    clamp_list = [1e-5, 2]
+    # 修改前
+    # clamp_list = [1e-5, 2]
+
+    # 修改后 (放宽上限，下限保持 1e-5 或 1e-6 均可)
+    clamp_list = [1e-6, 10.0]
 
     # 目录设置（可覆盖）
     args.Train_dir = "./mixdata/train/mix_data_76800_20dB.mat"
@@ -73,7 +77,7 @@ if __name__ == "__main__":
 
     # ================ 模型初始化 ================
     net = cfmf(Para).to(device)
-    # net = torch.compile(net)
+    net = torch.compile(net)
 
     # ================ 日志与保存目录 ================
     logger_name = 'log' + str(ind_t)
@@ -101,8 +105,6 @@ if __name__ == "__main__":
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.gamma)
 
     # ================ 数据加载（使用 hdf5storage 读取 .mat） ================
-    
-
     data_train = hdf5storage.loadmat(args.Train_dir)
     label_train = hdf5storage.loadmat(args.labelTrain_dir)
     data_test = hdf5storage.loadmat(args.Test_dir)
@@ -110,8 +112,8 @@ if __name__ == "__main__":
 
     tic = time.time()
     datasets = {
-        'train': DenoisingDatasets.SimulateTrain(data_train, label_train, zidian=zidian_obj),
-        'test': DenoisingDatasets.SimulateTest(data_test, label_test, zidian=zidian_obj)
+        'train': Datasets.SimulateTrain(data_train, label_train, zidian=zidian_obj),
+        'test': Datasets.SimulateTest(data_test, label_test, zidian=zidian_obj)
     }
     toc = time.time()
     print('Dataset build time: {:.2f}s'.format(toc - tic))
@@ -148,14 +150,16 @@ if __name__ == "__main__":
 
     # ================ 训练 / 分类 流程 ================
     if TRAIN_PHASE == 'train':
-        criterion = PearsonLoss(weight_pearson=ps_list[0], weight_mse=ps_list[1])
+        # criterion = PearsonLoss(weight_pearson=ps_list[0], weight_mse=ps_list[1])
+        # 2. 实例化这个新的 Loss
+        criterion = CompositeLoss(pearson_weight=ps_list[0], mse_weight=ps_list[1], l1_weight=0.1) 
 
         # train_model2: 保持你已有接口（net, data_loader, optimizer, scheduler, criterion, args, logger, ...)
         Loss, final_outputs, final_labels = train_model2(net, data_loader, optimizer, scheduler,criterion, args, 
                                                          logger, num_iter_epoch, zidiancuda, clamp_list, start_epoch=0, phase='train')
 
         
-        final_outputs, final_labels = load_saved_patches(args.output_dir, 100)
+        # final_outputs, final_labels = load_saved_patches(args.output_dir, 100)
            
 
     # 清理内存

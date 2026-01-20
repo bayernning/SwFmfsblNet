@@ -11,7 +11,7 @@ import argparse
 def set_opts():
     parser = argparse.ArgumentParser()
     # trainning settings
-    parser.add_argument('--batch_size', type=int, default=8,
+    parser.add_argument('--batch_size', type=int, default=64,
                         help="Batchsize of training, (default:64)")
     parser.add_argument('--test_batchsize', type=int, default=8,
                         help="Batchsize of training, (default:64)")

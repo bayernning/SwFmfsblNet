@@ -412,9 +412,14 @@ class cfmf(nn.Module):
         d = d.reshape(batch_size, -1, 1, 1)
         T = T.reshape(batch_size, -1, 1, 1)
 
-        U = tc.zeros([batch_size, 1, M, 1], dtype=tc.complex128).cuda()
+        # 修改前
+        # U = tc.zeros([batch_size, 1, M, 1], dtype=tc.complex128).cuda()
 
-        eps = (self.a0 / self.b0) * tc.ones(batch_size, 1, 1, 1).cuda()
+        # 修改后 (明确 complex64)
+        U = tc.zeros([batch_size, 1, M, 1], dtype=tc.complex64).cuda()
+        eps = (self.a0 / self.b0) * tc.ones(batch_size, 1, 1, 1).cuda() #(默认float32，这行通常没事，但为了保险)
+        # eps 保持默认即可，因为它与 complex64 相乘会自动适配，但要确保它不是 double
+
         Lamda = c[:, 0, :, :].unsqueeze(-1) / (d[:, 0, :, :].unsqueeze(-1) * tc.ones(batch_size, 1, M, 1).cuda())
 
         for k_layer in range(self.Nlayer - 1):
@@ -446,22 +451,30 @@ class cfmf(nn.Module):
         U3 = AY  # 65536 1
         c = c0 + 1
         a = a0 + N
-        temp1 = tc.div(tc.ones(batch_size, 1, M, 1).cuda(), (eps * T + Lamda))  # 20 1 N2 1
+        temp1 = tc.div(tc.ones(batch_size, 1, M, 1).cuda(), (eps * T + Lamda+1e-6))  # 20 1 N2 1
         U = eps * (U1 - U2 + U3) * temp1  # 20 1 N2 1
 
         D = myDiag(AA).unsqueeze(2).cuda()  # 1 N2 1
-        temp = eps * D + Lamda  # 20 1 N2 1
+        # 修改点 2: Sigma 分母增加 1e-6
+        # 原始: temp = eps * D + Lamda
+        # 原始: Sigma = tc.div(tc.ones(batch_size, 1, M, 1).cuda(), temp)
+        temp = eps * D + Lamda + 1e-6
         Sigma = tc.div(tc.ones(batch_size, 1, M, 1).cuda(), temp)
 
         # Update eps --- precision of Noise
         A = zidian['A']
 
         eps1 = tc.norm(Y - A @ U, 'fro', dim=[2, 3], keepdim=True) ** 2
-        eps2 = tc.sum(D * Sigma, dim=[2, 3], keepdim=True)  # *：矩阵元素点乘；@矩阵相乘
-        eps = a / (b0 + (eps1 + eps2))  # size N_size*1
+        eps2 = tc.sum(D * Sigma, dim=[2, 3], keepdim=True)
+        
+        # 修改点 3: eps 更新分母增加 1e-6  # *：矩阵元素点乘；@矩阵相乘
+        # eps = a / (b0 + (eps1 + eps2))  # size N_size*1
+        eps = a / (b0 + (eps1 + eps2) + 1e-6)
 
-        # Update Lamda--- precision of Signal
-        Lamda = c / (d0 + (tc.abs(U) ** 2 + Sigma))
+        # Update Lamda
+        # 修改点 4: Lamda 更新分母增加 1e-6
+        # 原始: Lamda = c / (d0 + (tc.abs(U) ** 2 + Sigma))
+        Lamda = c / (d0 + (tc.abs(U) ** 2 + Sigma) + 1e-6)
 
         return U, eps, Lamda, c0, d0
 
@@ -473,13 +486,20 @@ class cfmf(nn.Module):
         U3 = AY
         P = U.shape[2]
         N = self.N
-        temp1 = tc.div(tc.ones(batch_size, 1, P, 1).cuda(), (eps * T + Lamda))  # size: N_size*P*Q
+
+        # 修改点 1: temp1 分母增加 1e-6
+        # 原始: temp1 = tc.div(tc.ones(batch_size, 1, P, 1).cuda(), (eps * T + Lamda))
+        temp1 = tc.div(tc.ones(batch_size, 1, P, 1).cuda(), (eps * T + Lamda + 1e-6))
+        
         U = eps * (U1 - U2 + U3) * temp1  # size: N_size*P*Q
         # U = tc.reshape(U, (-1, 1, N, N)).transpose(3, 2)
         # U1 = U.detach().data.cpu().numpy()
         # U1 = np.fft.ifftshift(U1, 0)
         # U2 = tc.from_numpy(U1).cuda()
-        U = U / tc.max(abs(U))
+        
+        # 修改点 2: 归一化分母防止除零
+        # 原始: U = U / tc.max(abs(U))
+        U = U / (tc.max(abs(U)) + 1e-8)
         return abs(U)
 
 

@@ -11,7 +11,7 @@ from network.dispimage import convert_images_pt_to_png
 from options import set_opts
 import logging
 import numpy as np
-from network import DenoisingDatasets, utils_logger, zidian, util
+from network import Datasets, utils_logger, zidian, util
 from network.cfmf_cdT import cfmf
 from scipy.io import loadmat
 import os
@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     tic = time.time()
     datasets = {
-        'test': DenoisingDatasets.SimulateTest(data_test, label_test, zidian=zidian)
+        'test': Datasets.SimulateTest(data_test, label_test, zidian=zidian)
         # 'test': DenoisingDatasets.SimulateTest(data_test, label_test, zidian=zidian)
         
     }
