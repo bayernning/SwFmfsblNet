@@ -197,20 +197,26 @@ def train_model(net, data_loader, optimizer, criterion, args, logger, num_iter_e
         # 保存损失     
         Loss[epoch] = loss_per_epoch
         
-        # 保存检查点
+        # 保存检查点（每10轮保存一次，文件名包含轮次和皮尔逊指标）
         if (epoch + 1) % 10 == 0:
-            checkpoint_path = os.path.join(args.model_dir, f'model_epoch_{epoch + 1}.pth')
-            torch.save({'epoch': epoch, 'model_state_dict': net.state_dict(), 'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
-        
-        
+            checkpoint_path = os.path.join(args.model_dir, f'model_epoch_{epoch + 1}_pearson_{pearson_per_epoch:.4f}.pth')
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'pearson': pearson_per_epoch,
+                'loss': loss_per_epoch
+            }, checkpoint_path)
+
+
         # 清理内存
         gc.collect()
         torch.cuda.empty_cache()
-    
+
     # 打印总训练时间
     logger.info(f'总训练时间: {total_time:.2f}秒')
     logger.info(f'平均每个epoch时间: {total_time/args.epochs:.2f}秒')
-    
+
     return Loss, final_outputs, final_labels
 
 def train_model2(net, data_loader, optimizer, scheduler ,criterion, args, logger, num_iter_epoch, zidiancuda, clamp_list, start_epoch=0, phase='train'):
@@ -344,23 +350,29 @@ def train_model2(net, data_loader, optimizer, scheduler ,criterion, args, logger
         print(T)
         logger.info('-' * 50)
         
-        # 保存损失     
+        # 保存损失
         Loss[epoch] = loss_per_epoch
-        
-        # 保存检查点
+
+        # 保存检查点（每10轮保存一次，文件名包含轮次和皮尔逊指标）
         if (epoch + 1) % 10 == 0:
-            checkpoint_path = os.path.join(args.model_dir, f'model_epoch_{epoch + 1}.pth')
-            torch.save({'epoch': epoch, 'model_state_dict': net.state_dict(), 'optimizer_state_dict': optimizer.state_dict()}, checkpoint_path)
-        
-        
+            checkpoint_path = os.path.join(args.model_dir, f'model_epoch_{epoch + 1}_pearson_{pearson_per_epoch:.4f}.pth')
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'pearson': pearson_per_epoch,
+                'loss': loss_per_epoch
+            }, checkpoint_path)
+
+
         # 清理内存
         gc.collect()
         torch.cuda.empty_cache()
-    
+
     # 打印总训练时间
     logger.info(f'总训练时间: {total_time:.2f}秒')
     logger.info(f'平均每个epoch时间: {total_time/args.epochs:.2f}秒')
-    
+
     return Loss, final_outputs, final_labels
 
 def test_model(net, data_loader, criterion, args, num_iter_epoch, zidiancuda, clamp_list,phase='test'):

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import os
 import time
-import shutil
 import warnings
 from math import ceil
+from datetime import datetime
 
 import torch
 import torch.optim as optim
@@ -27,6 +27,9 @@ if __name__ == "__main__":
     warnings.simplefilter('ignore', Warning)
     args = set_opts()
 
+    # 生成运行时间戳，用于日志和模型目录命名
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     # reproducibility (optional)
     # seed = 89228
     # torch.manual_seed(seed)
@@ -47,10 +50,17 @@ if __name__ == "__main__":
     args.Train_dir = "./mixdata/train/mix_data_76800_20dB.mat"
     args.labelTrain_dir = "./mixdata/train/mix_label_76800.mat"
 
-    args.model_dir = os.path.join('./model/model' + str(ind_t) + '/')
-    args.log_dir = os.path.join('./log/')
+    # 使用运行时间戳创建日志和模型目录
+    args.model_dir = os.path.join('./model', f'model_{run_timestamp}/')
+    args.log_dir = os.path.join('./log', f'log_{run_timestamp}/')
     args.output_dir = "./output_data/"
     args.testoutput_dir = "./test_output"
+
+    # 自动创建目录
+    os.makedirs(args.model_dir, exist_ok=True)
+    os.makedirs(args.log_dir, exist_ok=True)
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(args.testoutput_dir, exist_ok=True)
 
     zidian_obj, zidiancuda = zidian.create_zidian(args.G_dir, args.GG_dir)
 
@@ -80,14 +90,10 @@ if __name__ == "__main__":
     net = torch.compile(net)
 
     # ================ 日志与保存目录 ================
-    logger_name = 'log' + str(ind_t)
+    logger_name = f'log_{run_timestamp}'
     if TRAIN_PHASE == 'train':
-        utils_logger.logger_info(logger_name, log_path=os.path.join(args.log_dir, logger_name + '.log'))
+        utils_logger.logger_info(logger_name, log_path=os.path.join(args.log_dir, f'{logger_name}.log'))
         logger = logging.getLogger(logger_name)
-
-        if os.path.isdir(args.model_dir):
-            shutil.rmtree(args.model_dir)
-        os.makedirs(args.model_dir, exist_ok=True)
 
         # 记录参数信息
         param = count_param(net)
@@ -98,7 +104,6 @@ if __name__ == "__main__":
             logger.info('------> {:<15s}: {:s}'.format(arg, str(getattr(args, arg))))
     else:
         logger = None
-        os.makedirs(args.model_dir, exist_ok=True)
 
     # ================ 优化器设置 ================
     optimizer = optim.Adam(net.parameters(), lr=args.lr)

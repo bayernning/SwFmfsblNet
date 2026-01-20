@@ -384,16 +384,13 @@ class cfmf(nn.Module):
         self.P = Para['P']  # 256
         self.Q = Para['Q']  # 1
         self.N = Para['N']
-        # self.layer=Para['layernum']
+
+        # a0, b0 作为可学习参数
         self.a0 = nn.Parameter(tc.tensor(Para['a0']))
         self.b0 = nn.Parameter(Para['b0'] * tc.ones(1))
-        self.T = nn.Parameter(tc.tensor(Para['T']))
-        # 输入变化的cd
-        self.c0 = nn.Parameter(tc.tensor(Para['c0']))
-        self.d0 = nn.Parameter(tc.tensor(Para['d0']))
-        # self.T = nn.Parameter(tc.tensor([Para['T']]))
-        #        self.h = HyperNet_7convL_CU_5(3, 1, self.Nlayer)
-        self.h = HyperNet_7convL_CU_5_1(3, 1, self.Nlayer) #HyperNet_1   HyperNet_7convL_CU_5_1
+
+        # c0, d0, T 由 HyperNet 生成，不再作为 nn.Parameter
+        self.h = HyperNet_7convL_CU_5_1(3, 1, self.Nlayer)  # HyperNet_1   HyperNet_7convL_CU_5_1
 
     def forward(self, Y, zidian, clamp_min, clamp_max):
         A = zidian['A']
