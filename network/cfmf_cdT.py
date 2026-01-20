@@ -253,11 +253,13 @@ class cfmf(nn.Module):
 
         # c, d, T = self.h(abs(AY).float().squeeze(3), clamp_min, clamp_max)  # [batch 58]
         # === 修改开始 ===
-        # 1. 构造双通道输入 [Batch, 2, 256]
-        # 确保 AY 是复数 (complex64)，提取实部和虚部
-        # AY.real: [Batch, 256, 1] -> squeeze -> [Batch, 256] -> unsqueeze -> [Batch, 1, 256]
-        ay_real = AY.real.squeeze(-1).unsqueeze(1)
-        ay_imag = AY.imag.squeeze(-1).unsqueeze(1)
+        # 1. 先把数据展平为 [Batch, 256]
+        # 使用 reshape(batch_size, -1) 是最安全的写法，能自动处理中间多余的 1 维度
+        ay_real_flat = AY.real.reshape(batch_size, -1) # [Batch, 256]
+        ay_imag_flat = AY.imag.reshape(batch_size, -1) # [Batch, 256]
+        # 2. 增加通道维度 -> [Batch, 1, 256]
+        ay_real = ay_real_flat.unsqueeze(1)
+        ay_imag = ay_imag_flat.unsqueeze(1)
         
         # 拼接: [Batch, 2, 256]
         ay_input = torch.cat([ay_real, ay_imag], dim=1) 
