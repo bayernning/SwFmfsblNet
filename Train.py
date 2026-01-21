@@ -38,7 +38,6 @@ if __name__ == "__main__":
     # torch.backends.cudnn.benchmark = False
 
     # 模型参数设置
-    ind_t = 12
     ps_list = [60, 0.45]
     # 修改前
     # clamp_list = [1e-5, 2]
@@ -47,8 +46,8 @@ if __name__ == "__main__":
     clamp_list = [1e-6, 10.0]
 
     # 目录设置（可覆盖）
-    args.Train_dir = "./mixdata/train/mix_data_76800_20dB.mat"
-    args.labelTrain_dir = "./mixdata/train/mix_label_76800.mat"
+    args.Train_dir = "./train_data/mix_data_76800_20dB.mat"
+    args.labelTrain_dir = "./train_data/mix_label_76800.mat"
 
     # 使用运行时间戳创建日志和模型目录
     args.model_dir = os.path.join('./model', f'model_{run_timestamp}/')
@@ -87,7 +86,7 @@ if __name__ == "__main__":
 
     # ================ 模型初始化 ================
     net = cfmf(Para).to(device)
-    net = torch.compile(net)
+    # net = torch.compile(net)
 
     # ================ 日志与保存目录 ================
     logger_name = f'log_{run_timestamp}'

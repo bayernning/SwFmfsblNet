@@ -252,6 +252,7 @@ class cfmf(nn.Module):
         AY = tc.matmul(AT, Y)  # 65536 1
 
         # c, d, T = self.h(abs(AY).float().squeeze(3), clamp_min, clamp_max)  # [batch 58]
+        # c, d, T = self.h(abs(AY).float().squeeze(3), clamp_min, clamp_max)  # [batch 58]
         # === 修改开始 ===
         # 1. 先把数据展平为 [Batch, 256]
         # 使用 reshape(batch_size, -1) 是最安全的写法，能自动处理中间多余的 1 维度

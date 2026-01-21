@@ -44,10 +44,8 @@ if __name__ == "__main__":
     args.model_dir = os.path.join('./model/model'+str(ind_t)+'/')
     args.log_dir = os.path.join('./log/')
     args.output_dir = "./output_data/"
-    # args.Test_dir="./mixdata/test_data1_76800.mat" #test_data_92160  data2s_test_92160.mat test_data_38400.mat
-    # args.labelTest_dir='./mixdata/test_label1_76800.mat'  #test_label_92160  label2s_test_92160.mat test_label_38400.mat
-    args.Test_dir=f"./mixdata/test/mix_data1_76800_{noise}dB.mat" 
-    args.labelTest_dir='./mixdata/test/test_label1_76800.mat' 
+    args.Test_dir=f"./test_data/mix_data1_76800_20dB.mat" 
+    args.labelTest_dir='./test_data/test_label1_76800' 
 
     # 模型初始化参数
     cinit = np.random.rand(args.layer_num - 1) * 1e-5 + 1e-3

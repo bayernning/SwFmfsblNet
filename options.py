@@ -11,15 +11,15 @@ import argparse
 def set_opts():
     parser = argparse.ArgumentParser()
     # trainning settings
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=256,
                         help="Batchsize of training, (default:64)")
     parser.add_argument('--test_batchsize', type=int, default=64,
                         help="Batchsize of training, (default:64)")
     parser.add_argument('--epochs', type=int, default=100, help="Training epochs,  (default:60)")
-    parser.add_argument('--lr', type=float, default=2e-3,  # 1e-3
+    parser.add_argument('--lr', type=float, default=1e-4,  # 1e-3
                         help="Initialized learning rate, (default: 1e-5)")
 
-    parser.add_argument('--gamma', type=float, default=0.9,
+    parser.add_argument('--gamma', type=float, default=0.99,
                         help="Decaying rate for the learning rate, (default: 0.3)")
     parser.add_argument('-p', '--print_freq', type=int, default=100,
                         help="Print frequency (default: 100)")
@@ -33,14 +33,14 @@ def set_opts():
                         help="GPU ID, which allow multiple GPUs")
 
     # dataset settings
-    parser.add_argument('--Train_dir', default="./mixdata/mix_data_76800.mat", type=str, metavar='PATH',
+    parser.add_argument('--Train_dir', default="./train_data/mix_data_76800_20dB.mat", type=str, metavar='PATH',
                         help="Path to save the SIDD dataset, (default: './data/data_train_mix4_25600-0.mat')")
-    parser.add_argument('--Test_dir', default='./mixdata/data2_test_92160.mat', type=str,
+    parser.add_argument('--Test_dir', default='./test_data/mix_data1_76800_20dB.mat', type=str,
                         metavar='PATH', help="Path to save the images, (test_data_92160default: ./完整混合测试集/data_test25600_20dB.mat)")
 
-    parser.add_argument('--labelTrain_dir', default='./mixdata/mix_label_76800.mat', type=str,
+    parser.add_argument('--labelTrain_dir', default='./train_data/mix_label_76800.mat', type=str,
                         metavar='PATH', help="Path to save the SIDD dataset, (default: ./data/label_train_p3_25600.mat)")
-    parser.add_argument('--labelTest_dir', default='./mixdata/label2_test_92160.mat', type=str,
+    parser.add_argument('--labelTest_dir', default='./test_data/test_label1_76800.mat', type=str,
                         metavar='PATH', help="Path to save the images, (test_label_92160default: ./完整混合测试集/label_test_25600.mat)")
 
     parser.add_argument('--Nr0_dir', default='./data/Nr0_38.mat', type=str, metavar='PATH',

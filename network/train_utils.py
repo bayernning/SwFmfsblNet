@@ -298,7 +298,7 @@ def train_model2(net, data_loader, optimizer, scheduler ,criterion, args, logger
                                         
             
             # 计算损失
-            loss, pearson_iter, mse_iter, l1_iter = criterion(x_out, x_te)
+            loss, pearson_iter, mse_iter, l1_iter,smooth_loss = criterion(x_out, x_te)
             ssim_iter = util.batch_SSIM(abs(x_out), abs(x_te))
             loss.backward()
             optimizer.step()
@@ -309,11 +309,12 @@ def train_model2(net, data_loader, optimizer, scheduler ,criterion, args, logger
             pearson_per_epoch += pearson_iter / num_iter_epoch[phase]
             mse_per_epoch += mse_iter/ num_iter_epoch[phase] 
             l1_per_epoch = l1_iter / num_iter_epoch[phase]
+            smooth_per_epoch = smooth_loss / num_iter_epoch[phase]
             
             # 打印进度
             if (ii + 1) % np.floor(num_iter_epoch[phase] / 2) == 0:
                 logger.info(
-                    '------> [Epoch:{:>2d}/{:<2d}] {:s}:{:0>4d}/{:0>4d}, Loss={:+.2e},Pearson={:+.4e}, l1_iter={:+.4f},lr={:.1e}'.format(
+                    '------> [Epoch:{:>2d}/{:<2d}] {:s}:{:0>4d}/{:0>4d}, Loss={:+.2e},Pearson={:+.4e}, l1_iter={:+.4f},smooth={:+.4f},lr={:.1e}'.format(
                         epoch + 1,
                         args.epochs,
                         phase,
@@ -322,6 +323,7 @@ def train_model2(net, data_loader, optimizer, scheduler ,criterion, args, logger
                         loss_per_epoch,
                         pearson_per_epoch,
                         l1_per_epoch,
+                        smooth_per_epoch,
                         optimizer.param_groups[0]['lr']
                     )
                 )

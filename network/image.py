@@ -66,7 +66,7 @@ def convert_images_pt_to_png(final_outputs, output_dir):
 
 def load_saved_patches(data_dir):
     # checkfile = os.path.join(data_dir,f'train_patch_20.pt')
-    checkfile = os.path.join(data_dir,f'train_patch_10.pt')
+    checkfile = os.path.join(data_dir,f'train_patch_50.pt')
     data = torch.load(checkfile)
     final_outputs = data['image']
     final_labels = data['label']
