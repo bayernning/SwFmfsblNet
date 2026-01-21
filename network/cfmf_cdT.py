@@ -174,8 +174,8 @@ class HyperNet_Context2D(nn.Module):
         
         # 1. 2D 卷积层：同时提取 Range (H) 和 Time (W/Batch) 特征
         # 输入形状虚拟为: [1, 2, Range(256), Batch(Time)]
-        self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=(3, 3), padding=(1, 1))
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=(3, 3), padding=(1, 1))
+        self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=(3, 3), padding=(1, 1),padding_mode='replicate')
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=(3, 3), padding=(1, 1),padding_mode='replicate')
         
         # 2. 池化层：我们只压缩 Range 维度，保留 Time(Batch) 维度
         # AdaptiveAvgPool2d((1, None)) 表示 H 变为 1，W (Batch) 保持原样
